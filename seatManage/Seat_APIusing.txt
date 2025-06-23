@@ -1,0 +1,82 @@
+===========================
+User Management API Usage
+===========================
+
+1. Get Seats
+------------------
+API     : /api/getSeats
+Method  : GET
+Auth    : Yes
+Request : {zone}
+Response: [{ id, LEVEL, ZONE, PRICE, ROW, COLUMN, DISPLAY, VISIBLE, STATUS, UPDATED_AT }]
+
+===========================
+
+2. Book Seats
+------------------
+API     : /api/bookSeats
+Method  : POST
+Auth    : Yes
+Request : { booking}
+Response: [{ status, message, transactionId }]
+Request Example:
+{
+    'booking': '13|14|15|'
+}
+Response Example:
+{
+    'status':'success',
+    "message": 'Seats booked and transaction recorded',
+    'transactionId': 45
+}
+If already taken Example:
+{
+    "status": "fail",
+    "message": "Some seats are already taken",
+    "seats_data": [
+        {
+            "id": 4281,
+            "row": "A",
+            "column": 1,
+            "display": "20"
+        },
+        {
+            "id": 4282,
+            "row": "A",
+            "column": 2,
+            "display": "19"
+        },
+        {
+            "id": 4283,
+            "row": "A",
+            "column": 3,
+            "display": "18"
+        }
+    ]
+}
+
+===========================
+
+3. get Empty Seats
+------------------
+API     : /api/getEmptySeats
+Method  : get
+Auth    : Yes (Admin Only)
+Request : { }
+Response: [{ status, zones }]
+Response Example:
+{
+    "status": "success",
+    "zones": [
+        {
+            "ZONE": "A1",
+            "Max": 187,
+            "Available": 186
+        },
+        {
+            "ZONE": "A2",
+            "Max": 244,
+            "Available": 244
+        }
+    ]
+}

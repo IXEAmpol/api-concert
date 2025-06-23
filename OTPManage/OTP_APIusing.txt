@@ -1,0 +1,73 @@
+
+===========================
+OTP Management API Usage
+===========================
+
+1. Register Request (Send OTP)
+------------------------------
+API     : /api/registerUser
+Method  : POST
+Auth    : No
+Desc    : Request OTP for new user registration.
+Request : {
+  "IdenNumber": "1234567890123",
+  "Email": "user@example.com",
+  "Tel": "0812345678",
+  "Way": "Email"  // or "Phone"
+}
+Response: {
+  "status": "success",
+  "message": "OTP sent"
+}
+
+2. Confirm Registration
+-----------------------
+API     : /api/registerConfirm
+Method  : POST
+Auth    : No
+Desc    : Verify OTP and insert new user into database.
+Request : {
+  "FirstName": "John",
+  "LastName": "Doe",
+  "IdenNumber": "1234567890123",
+  "Addr": "123 Main Rd",
+  "Email": "user@example.com",
+  "Tel": "0812345678",
+  "Way": "Email",  // or "Phone"
+  "otp": "123456"
+}
+Response: {
+  "status": "success",
+  "message": "Transaction recorded successfully",
+  "token": "<JWT token>"
+}
+
+3. Login Request (Send OTP)
+---------------------------
+API     : /api/loginUser
+Method  : POST
+Auth    : No
+Desc    : Send OTP to user's registered email or phone for login.
+Request : {
+  "Contact": "user@example.com"  // or phone number "0812345678"
+}
+Response: {
+  "status": "success",
+  "message": "OTP sent to user for login"
+}
+
+4. Login Confirm
+----------------
+API     : /api/loginConfirm
+Method  : POST
+Auth    : No
+Desc    : Verify login OTP and return JWT token.
+Request : {
+  "Contact": "user@example.com",  // or phone number "0812345678"
+  "otp": "123456"
+}
+Response: {
+  "status": "success",
+  "message": "Transaction recorded successfully",
+  "token": "<JWT token>"
+}

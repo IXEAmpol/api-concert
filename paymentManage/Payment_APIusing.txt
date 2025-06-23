@@ -1,0 +1,224 @@
+===========================
+Payment Management API Usage
+===========================
+
+1. Get User Transactions
+------------------------
+API     : /api/getUserTransaction  
+Method  : GET  
+Auth    : Yes (User)  
+Permission: Only Owner  
+Request : None  
+Response:  
+[
+  {
+    "transactionId": 12,
+    "totalAmount": 27000,
+    "Status": 1,
+    "seats_data": [
+      { "zone": "A", "row": "A", "column": 1, "display": 20 },
+      { "zone": "A", "row": "A", "column": 2, "display": 19 }
+    ]
+  }
+]
+
+Example:
+Request: (with JWT in header)  
+GET /api/getUserTransaction
+
+Response:
+[
+  {
+    "transactionId": 12,
+    "totalAmount": 27000,
+    "Status": 1,
+    "seats_data": [
+      { "zone": "A", "row": "A", "column": 1, "display": 20 },
+      { "zone": "A", "row": "A", "column": 2, "display": 19 }
+    ]
+  }
+]
+
+=========================================
+
+2. Cancel a User Transaction
+----------------------------
+API     : /api/cancelUserTransaction  
+Method  : POST  
+Auth    : Yes (User/Admin)  
+Permission: Owner or Admin  
+Request : { "transactionId": number }  
+Response:  
+
+Success:
+{
+  "status": "success",
+  "message": "Transaction canceled and seats released"
+}
+
+Failure (Unauthorized):
+{
+  "status": "fail",
+  "message": "You are not allowed to cancel this transaction"
+}
+
+Failure (Transaction not found):
+{
+  "status": "fail",
+  "message": "Transaction not found"
+}
+
+Example:
+POST /api/cancelUserTransaction  
+Body:
+{
+  "transactionId": 12
+}
+
+=========================================
+
+3. Pay for a Transaction
+-------------------------
+API     : /api/payTransaction  
+Method  : POST  
+Auth    : Yes (User/Admin)  
+Permission: Owner or Admin  
+Request : { "transactionId": number, "billUrl": string }  
+Response:
+
+Success:
+{
+  "status": "success",
+  "message": "Transaction marked as paid successfully"
+}
+
+Failure (Invalid status):
+{
+  "status": "fail",
+  "message": "Transaction is not in a payable state (Status must be 1)"
+}
+
+Example:
+POST /api/payTransaction  
+Body:
+{
+  "transactionId": 12,
+  "billUrl": "https://example.com/bill-image.jpg"
+}
+
+=========================================
+
+4. Approve a Paid Transaction
+-----------------------------
+API     : /api/approveTransaction  
+Method  : POST  
+Auth    : Yes (Admin)  
+Permission: Admin Only  
+Request : { "transactionId": number }  
+Response:
+
+Success:
+{
+  "status": "success",
+  "message": "Transaction approved and seats marked as paid"
+}
+
+Failure (Not paid):
+{
+  "status": "fail",
+  "message": "Only transactions with status = 2 (paid) can be approved"
+}
+
+Example:
+POST /api/approveTransaction  
+Body:
+{
+  "transactionId": 12
+}
+
+=========================================
+
+5. Get All Transactions (Admin)
+-------------------------------
+API     : /api/getAllTransactions  
+Method  : GET  
+Auth    : Yes (Admin)  
+Permission: Admin Only  
+Request : None  
+Response:  
+{
+    "status": "success",
+    "data": [
+        {
+            "transactionId": 140,
+            "userId": 3,
+            "FirstName": "วุฒิเดช",
+            "LastName": "ยอดจิตร",
+            "Phone": "0628463236",
+            "Email": "wutthidet@ampolfood.com",
+            "Address": "62/1 หมู่ 11 แขวงศาลาธรรมสพน์ เขตทวีวัฒนา กรุงเทพมหานคร 10170",
+            "TotalAmount": 9500,
+            "BillURL": "https://i.ibb.co/FkKnyq4g/concert-1.jpg",
+            "Status": 2,
+            "CreatedAt": "2025-06-18T04:43:41.227Z",
+            "seats_data": [
+                {
+                    "zone": "A1",
+                    "row": "AA",
+                    "column": 12,
+                    "display": null
+                }
+            ]
+        }
+    ]
+}
+
+=========================================
+
+6. Get Seat Logs (Admin)
+-------------------------------
+API     : /api/getLogSeats  
+Method  : GET  
+Auth    : Yes (Admin)  
+Permission: Admin Only  
+Request : None  
+Response:  
+{
+    "status": "success",
+    "data": [
+        {
+            "logId": 2,
+            "userId": 3,
+            "firstName": "วุฒิเดช",
+            "lastName": "ยอดจิตร",
+            "isAdmin": true,
+            "message": "Canceled transaction/seats",
+            "At": "2025-06-20T11:28:37.690Z",
+            "seats_data": [
+                {
+                    "level": 1,
+                    "zone": "A1",
+                    "row": "AA",
+                    "column": 11
+                }
+            ]
+        },
+        {
+            "logId": 1,
+            "userId": 3,
+            "firstName": "วุฒิเดช",
+            "lastName": "ยอดจิตร",
+            "isAdmin": true,
+            "message": "Approved transaction/seats",
+            "At": "2025-06-20T11:16:20.443Z",
+            "seats_data": [
+                {
+                    "level": 1,
+                    "zone": "A1",
+                    "row": "AA",
+                    "column": 11
+                }
+            ]
+        }
+    ]
+}

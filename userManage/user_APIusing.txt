@@ -1,0 +1,54 @@
+===========================
+User Management API Usage
+===========================
+
+1. Get User Data
+----------------
+API     : /api/getUser
+Method  : POST
+Auth    : ✅ Yes (JWT required)
+Desc    : Retrieve your own user data.
+Request : (no body needed, token determines user)
+Headers : { Authorization: "Bearer <JWT token>" }
+Response: {
+  "status": "success",
+  "data": {
+    "ID": 1,
+    "FirstName": "John",
+    "LastName": "Doe",
+    "IdenNumber": "1234567890123",
+    "Addr": "123 Main St",
+    "Email": "user@example.com",
+    "Tel": "0812345678",
+    "CreatedAt": "2025-06-14T12:34:56.789Z"
+  }
+}
+
+2. Update User Data
+--------------------
+API     : /api/updateUser
+Method  : POST
+Auth    : ✅ Yes (JWT required)
+Desc    : Update your own user data. Admin users (ID in ADMIN_IDS) may update others.
+Request : {
+  "ID": 1,
+  "FirstName": "John",
+  "LastName": "Doe",
+  "Addr": "123 Main Rd",
+  "IdenNumber": "1234567890123",
+  "Email": "new@example.com",
+  "Tel": "0899999999"
+}
+Headers : { Authorization: "Bearer <JWT token>" }
+Response (success): {
+  "status": "success",
+  "message": "User updated successfully"
+}
+Response (duplicate): {
+  "status": "fail",
+  "message": "Duplicate IdenNumber, Email, or Tel already in use"
+}
+Response (unauthorized): {
+  "status": "fail",
+  "message": "Permission denied: cannot update this user"
+}
