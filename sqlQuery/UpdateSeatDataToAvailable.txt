@@ -1,0 +1,3 @@
+UPDATE Seats_data
+   SET STATUS = '0'
+ WHERE ID = ''
