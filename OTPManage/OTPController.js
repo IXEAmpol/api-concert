@@ -4,7 +4,7 @@ const axios = require('axios');
 const qs = require('qs');
 require('dotenv').config();
 
-const sendOtp = async (contact, isEmail, otp) => {
+const sendOtp = async (contact, isEmail, otp, UserName) => {
   const expires = Date.now() + 5 * 60 * 1000;
   otpStore.set(contact, { otp, expires, contact });
 
@@ -27,6 +27,7 @@ const sendOtp = async (contact, isEmail, otp) => {
       to: contact,
       subject: process.env.MAIL_SUBJECT,
       text: `
+      เรียนคุณ ${UserName}
       ศูนย์การแพทย์กาญจนาภิเษก คณะแพทยศาสตร์ศิริราชพยาบาล มหาวิทยาลัยมหิดล
       ขอขอบคุณที่ท่านให้ความสนใจ คอนเสิร์ต Bird Fanfest 20XX (รอบการกุศล)  
       โปรดใช้รหัสนี้  เพื่อเข้าสู่บัญชีของคุณ
@@ -64,9 +65,9 @@ const sendOtp = async (contact, isEmail, otp) => {
 };
 
 exports.register = async (req, res) => {
-  const { IdenNumber, Email, Tel, Way } = req.body;
+  const { IdenNumber, Email, Tel, Way, FirstName, LastName } = req.body;
 
-  if ( !Email || !Tel || !Way ) {
+  if ( !Email || !Tel || !Way || !FirstName || !LastName ) {
     return res.status(400).json({ status: 'fail', message: 'Missing required fields' });
   }
 
@@ -84,11 +85,11 @@ exports.register = async (req, res) => {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    // const userName = FirstName + ' ' + LastName;
+    const userName = FirstName + ' ' + LastName;
     const contact = Way === 'Email' ? Email : Tel;
     const isEmail = Way === 'Email';
 
-    await sendOtp(contact, isEmail, otp);
+    await sendOtp(contact, isEmail, otp, userName);
 
     return res.json({ status: 'success', message: 'OTP sent' });
   } catch (err) {
@@ -195,7 +196,7 @@ exports.login = async (req, res) => {
     const isEmail = Contact.includes('@');
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await sendOtp(Contact, isEmail, otp);
+    await sendOtp(Contact, isEmail, otp, userName);
 
     return res.json({ status: 'success', message: `OTP sent to ${userName} for login` });
   } catch (err) {

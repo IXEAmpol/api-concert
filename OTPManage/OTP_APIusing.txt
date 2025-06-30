@@ -13,7 +13,9 @@ Request : {
   "IdenNumber": "1234567890123",
   "Email": "user@example.com",
   "Tel": "0812345678",
-  "Way": "Email"  // or "Phone"
+  "Way": "Email"  // or "Phone",
+  "FirstName": "Akkarawin",
+  "LastName": "Poonsin"
 }
 Response: {
   "status": "success",
