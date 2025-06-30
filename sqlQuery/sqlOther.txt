@@ -1,6 +1,6 @@
 USE [ConcertDB]
 GO
-/****** Object:  Table [dbo].[Seat_Logs]    Script Date: 23/06/2025 13:48:26 ******/
+/****** Object:  Table [dbo].[Seat_Logs]    Script Date: 30/06/2025 15:06:04 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -17,26 +17,54 @@ PRIMARY KEY CLUSTERED
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[Transactions]    Script Date: 23/06/2025 13:48:26 ******/
+/****** Object:  Table [dbo].[Tax_Invoice_Records]    Script Date: 30/06/2025 15:06:04 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-CREATE TABLE [dbo].[Transactions](
+CREATE TABLE [dbo].[Tax_Invoice_Records](
 	[ID] [int] IDENTITY(1,1) NOT NULL,
-	[User_ID] [int] NOT NULL,
-	[Booking] [nvarchar](max) NOT NULL,
-	[TotalAmount] [decimal](10, 2) NOT NULL,
-	[Status] [tinyint] NOT NULL,
-	[CreatedAt] [datetime] NULL,
-	[BillURL] [nvarchar](max) NULL,
+	[InName] [nvarchar](max) NULL,
+	[Name] [nvarchar](max) NULL,
+	[Tax_Identification_No] [nvarchar](20) NULL,
+	[Tax_Address] [nvarchar](500) NULL,
+	[Invoice_Amount] [decimal](10, 2) NOT NULL,
+	[Tax_Amount] [decimal](10, 2) NOT NULL,
+	[Tax_Date] [datetime] NOT NULL,
+	[Approved_By_Admin] [int] NULL,
+	[Email] [nvarchar](255) NULL,
+	[Notes] [nvarchar](max) NULL,
 PRIMARY KEY CLUSTERED 
 (
 	[ID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
 GO
-/****** Object:  Table [dbo].[UserData]    Script Date: 23/06/2025 13:48:26 ******/
+/****** Object:  Table [dbo].[Transactions]    Script Date: 30/06/2025 15:06:04 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [dbo].[Transactions](
+	[ID] [nvarchar](50) NOT NULL,
+	[User_ID] [int] NOT NULL,
+	[Tax_id] [int] NULL,
+	[Tax_Status] [int] NOT NULL,
+	[Booking] [nvarchar](max) NOT NULL,
+	[TotalAmount] [decimal](10, 2) NOT NULL,
+	[Status] [tinyint] NOT NULL,
+	[BillURL] [nvarchar](max) NULL,
+	[BackURL1] [nvarchar](max) NULL,
+	[BackURL2] [nvarchar](max) NULL,
+	[CreatedAt] [datetime] NULL,
+	[BookExpired] [datetime] NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[ID] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+/****** Object:  Table [dbo].[UserData]    Script Date: 30/06/2025 15:06:04 ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -58,11 +86,5 @@ PRIMARY KEY CLUSTERED
 GO
 ALTER TABLE [dbo].[Seat_Logs] ADD  DEFAULT (getdate()) FOR [Created_At]
 GO
-ALTER TABLE [dbo].[Transactions] ADD  DEFAULT (getdate()) FOR [CreatedAt]
-GO
-ALTER TABLE [dbo].[Transactions]  WITH CHECK ADD  CONSTRAINT [FK_UserData_Transaction] FOREIGN KEY([User_ID])
-REFERENCES [dbo].[UserData] ([ID])
-ON DELETE CASCADE
-GO
-ALTER TABLE [dbo].[Transactions] CHECK CONSTRAINT [FK_UserData_Transaction]
+ALTER TABLE [dbo].[Tax_Invoice_Records] ADD  DEFAULT (getdate()) FOR [Tax_Date]
 GO

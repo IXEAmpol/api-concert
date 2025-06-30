@@ -1,4 +1,5 @@
 const { sql, bcrypt, dbConfig } = require('../imports/shared');
+const moment = require('moment-timezone');
 
 exports.getSeats = async (req, res) => {
   const { ZONE } = req.body;
@@ -57,7 +58,6 @@ exports.bookSeats = async (req, res) => {
     await sql.connect(dbConfig);
     const request = new sql.Request();
 
-    // Step 1: Check seat availability
     const checkResult = await request.query(`
       SELECT [ID], [ZONE], [ROW], [COLUMN], [DISPLAY] FROM Seats_data
       WHERE ID IN (${idList}) AND STATUS != 0
@@ -78,35 +78,51 @@ exports.bookSeats = async (req, res) => {
       });
     }
 
-    // Step 2: Get total amount
     const totalResult = await request.query(`
       SELECT SUM(PRICE) as Total FROM Seats_data
       WHERE ID IN (${idList})
     `);
     const totalAmount = totalResult.recordset[0].Total || 0;
 
-    // Step 3: Update seat statuses
     await request.query(`
       UPDATE Seats_data
       SET STATUS = 1, UPDATED_AT = GETDATE()
       WHERE ID IN (${idList})
     `);
 
-    // Step 4: Insert transaction and return inserted ID
+    const zoneResult = await request.query(`
+      SELECT TOP 1 ZONE FROM Seats_data
+      WHERE ID IN (${idList})
+    `);
+    const zonePrefix = zoneResult.recordset[0]?.ZONE || 'SE';
+
+    let transactionId;
+    let isUnique = false;
+
+    while (!isUnique) {
+      const randomPart = Math.floor(100000 + Math.random() * 900000);
+      transactionId = `${zonePrefix}-${randomPart}`;
+
+      const idCheck = await request.query(`
+        SELECT COUNT(*) as count FROM Transactions WHERE ID = '${transactionId}'
+      `);
+
+      if (idCheck.recordset[0].count === 0) {
+        isUnique = true;
+      }
+    }
+
     const insertRequest = new sql.Request();
+    insertRequest.input('ID', sql.NVarChar(50), transactionId);
     insertRequest.input('User_ID', sql.Int, userId);
     insertRequest.input('Booking', sql.NVarChar(sql.MAX), booking);
     insertRequest.input('TotalAmount', sql.Decimal(10, 2), totalAmount);
-    insertRequest.input('Status', sql.TinyInt, 1); // 1 = not paid
-    insertRequest.input('CreatedAt', sql.DateTime, new Date());
+    insertRequest.input('Status', sql.TinyInt, 1);
 
-    const insertResult = await insertRequest.query(`
-      INSERT INTO Transactions (User_ID, Booking, TotalAmount, Status, CreatedAt)
-      OUTPUT INSERTED.ID
-      VALUES (@User_ID, @Booking, @TotalAmount, @Status, @CreatedAt)
+    await insertRequest.query(`
+      INSERT INTO Transactions (ID, User_ID, Booking, TotalAmount, Status, CreatedAt, Tax_Status, BookExpired)
+      VALUES (@ID, @User_ID, @Booking, @TotalAmount, @Status, GetDate(), 0, DATEADD(HOUR, 1, GetDate()))
     `);
-
-    const transactionId = insertResult.recordset[0].ID;
 
     return res.json({
       status: 'success',
@@ -119,6 +135,7 @@ exports.bookSeats = async (req, res) => {
     return res.status(500).json({ status: 'fail', message: err.message });
   }
 };
+
 
 exports.getEmptySeats = async (req, res) => {
   const requesterId = req.user?.id;

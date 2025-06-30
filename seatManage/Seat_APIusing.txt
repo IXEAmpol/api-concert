@@ -17,37 +17,40 @@ Response: [{ id, LEVEL, ZONE, PRICE, ROW, COLUMN, DISPLAY, VISIBLE, STATUS, UPDA
 API     : /api/bookSeats
 Method  : POST
 Auth    : Yes
-Request : { booking}
+Request : { booking }
 Response: [{ status, message, transactionId }]
+
 Request Example:
 {
-    'booking': '13|14|15|'
+    "booking": "13|14|15|"
 }
+
 Response Example:
 {
-    'status':'success',
-    "message": 'Seats booked and transaction recorded',
-    'transactionId': 45
+    "status": "success",
+    "message": "Seats booked and transaction recorded",
+    "transactionId": "A1-123456"
 }
+
 If already taken Example:
 {
     "status": "fail",
     "message": "Some seats are already taken",
     "seats_data": [
         {
-            "id": 4281,
+            "zone": "A1",
             "row": "A",
             "column": 1,
             "display": "20"
         },
         {
-            "id": 4282,
+            "zone": "A1",
             "row": "A",
             "column": 2,
             "display": "19"
         },
         {
-            "id": 4283,
+            "zone": "A1",
             "row": "A",
             "column": 3,
             "display": "18"
@@ -57,13 +60,14 @@ If already taken Example:
 
 ===========================
 
-3. get Empty Seats
+3. Get Empty Seats
 ------------------
 API     : /api/getEmptySeats
-Method  : get
+Method  : GET
 Auth    : Yes (Admin Only)
 Request : { }
 Response: [{ status, zones }]
+
 Response Example:
 {
     "status": "success",

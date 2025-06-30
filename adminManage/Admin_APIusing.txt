@@ -1,0 +1,230 @@
+===========================
+Admin Management API Usage
+===========================
+
+1. Approve a Paid Transaction
+-----------------------------
+API     : /api/approveTransaction  
+Method  : POST  
+Auth    : Yes (Admin)  
+Permission: Admin Only  
+Request : { "transactionId": number }  
+Response:
+
+Example:
+POST /api/approveTransaction  
+Body:
+{
+  "transactionId": 12
+}
+
+Success:
+{
+  "status": "success",
+  "message": "Transaction approved and seats marked as paid"
+}
+
+Failure (Not paid):
+{
+  "status": "fail",
+  "message": "Only transactions with status = 2 (paid) can be approved"
+}
+
+=========================================
+
+2. Get All Transactions (Admin)
+-------------------------------
+API     : /api/getAllTransactions  
+Method  : GET  
+Auth    : Yes (Admin)  
+Permission: Admin Only  
+Request : None  
+Response:  
+{
+    "status": "success",
+    "data": [
+        {
+            "transactionId": "A1-987391",
+            "userId": 2,
+            "FirstName": "Akkarawin",
+            "LastName": "Poonsin",
+            "Phone": "0902744887",
+            "Email": "akkarawin@ampolfood.com",
+            "Address": "44/50",
+            "TotalAmount": 9500,
+            "BillURL": null,
+            "BackURL1": null,
+            "BackURL2": null,
+            "Status": 1,
+            "CreatedAt": "2025-06-30T10:53:56.783Z",
+            "BookExpired": "2025-06-30T11:53:56.783Z",
+            "TaxStatus": 0,
+            "TaxInName": null,
+            "Tax_Name": null,
+            "TaxIDNo": null,
+            "TaxAddress": null,
+            "TaxMail": null,
+            "seats_data": [
+                {
+                    "zone": "A1",
+                    "row": "AB",
+                    "column": 3,
+                    "display": null
+                }
+            ]
+        }
+    ]
+}
+
+=========================================
+
+3. Get Seat Logs (Admin)
+-------------------------------
+API     : /api/getLogSeats  
+Method  : GET  
+Auth    : Yes (Admin)  
+Permission: Admin Only  
+Request : None  
+Response:  
+{
+  "status": "success",
+  "data": [
+    {
+      "logId": 34,
+      "userId": 3,
+      "firstName": "วุฒิเดช",
+      "lastName": "ยอดจิตร",
+      "isAdmin": true,
+      "isAPF": true,
+      "isSRJ": false,
+      "message": "Canceled transaction/seats",
+      "At": "2025-06-23T13:50:09.037Z",
+      "seats_data": [
+        {
+            "level": 1,
+            "zone": "A1",
+            "row": "AA",
+            "column": 11
+        },
+        {
+            "level": 1,
+            "zone": "A1",
+            "row": "AA",
+            "column": 12
+        },
+        {
+            "level": 1,
+            "zone": "A1",
+            "row": "AA",
+            "column": 13
+        }
+      ]
+    }
+  ]
+}
+
+=========================================
+
+4. Upload backup Image (Admin)
+-------------------------------
+API        : /api/uploadBackImage
+Method     : POST
+Auth       : Yes (Admin)
+Permission : Admin Only
+Request:
+{
+  "transactionId": "A1-123456",   // required, string format like ZONE-XXXXXX
+  "backUrl1": "https://example.com/img1.jpg",  // optional
+  "backUrl2": "https://example.com/img2.jpg"   // optional
+} //backUrl Need to have 1 out of 2
+
+Success Response:
+{
+  "status": "success",
+  "message": "Backup image(s) uploaded successfully"
+}
+
+Failure (Missing transactionId):
+{
+  "status": "fail",
+  "message": "Transaction ID is required"
+}
+
+Failure (Unauthorized):
+{
+  "status": "fail",
+  "message": "Only admins can access this endpoint"
+}
+
+
+=========================================
+
+5. Approve Tax (Admin)
+-------------------------------
+Approve Tax Invoice
+API : /api/approveTaxInvoice
+Method : POST
+Auth : Yes (Admin)
+Permission: Admin Only
+Request : { "transactionId": string }
+
+Success:
+{
+"status": "success",
+"message": "Tax invoice approved successfully"
+}
+
+Failure (Missing transactionId):
+{
+"status": "fail",
+"message": "Transaction ID is required"
+}
+
+Failure (Not admin):
+{
+"status": "fail",
+"message": "Only admins can approve tax invoices"
+}
+
+Failure (No tax record linked):
+{
+"status": "fail",
+"message": "No tax invoice record associated with this transaction"
+}
+
+Example:
+POST /api/approveTaxInvoice
+Body:
+{
+"transactionId": "A1-123456"
+}
+
+=========================================
+
+6. Get Tax Report as Excel
+
+API     : /api/getTaxReport
+Method  : GET
+Auth    : Yes (Admin)
+Permission: Admin Only
+Request : None
+Response:
+
+On success:
+
+Returns an Excel file download containing all transactions with tax invoice data needed for tax deduction purposes.
+
+File includes transaction, user, and tax invoice details.
+
+Example:
+GET /api/getTaxReport
+
+Response:
+
+Downloaded file: tax_report_{timestamp}.xlsx
+
+If not admin:
+{
+"status": "fail",
+"message": "Only admin can access this endpoint"
+}

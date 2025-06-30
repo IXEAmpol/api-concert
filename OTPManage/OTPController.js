@@ -4,7 +4,7 @@ const axios = require('axios');
 const qs = require('qs');
 require('dotenv').config();
 
-const sendOtp = async (contact, isEmail, otp) => {
+const sendOtp = async (contact, isEmail, otp, UserName) => {
   const expires = Date.now() + 5 * 60 * 1000;
   otpStore.set(contact, { otp, expires, contact });
 
@@ -26,7 +26,21 @@ const sendOtp = async (contact, isEmail, otp) => {
       from: process.env.MAIL_FROM,
       to: contact,
       subject: process.env.MAIL_SUBJECT,
-      text: `${process.env.MAIL_HEAD_CONTENT} ${otp}`
+      text: `
+      เรียนคุณ ${UserName}
+      ศูนย์การแพทย์กาญจนาภิเษก คณะแพทยศาสตร์ศิริราชพยาบาล มหาวิทยาลัยมหิดล
+      ขอขอบคุณที่ท่านให้ความสนใจ คอนเสิร์ต Bird Fanfest 20XX (รอบการกุศล)  
+      โปรดใช้รหัสนี้  เพื่อเข้าสู่บัญชีของคุณ
+      Your OTP code is : ${otp}
+
+
+      หากท่านต้องการสอบถามเกี่ยวกับการซื้อบัตร
+      กรุณาติดต่อ 063-195-4174, 064-931-7415
+      LINE OA: @sigj.event (https://lin.ee/tfVt5us) 
+      โปรดระวังมิจฉาชีพ หรือบุคคลแอบอ้างเรียกรับเงิน หรือกระทำการใด ๆ ให้เกิดความเสียหายแก่ท่าน การซื้อบัตรคอนเสิร์ต Bird Fanfest 20XX (รอบการกุศล) จะต้องดำเนินการผ่านทางเว็บไซต์ : https://www.sigjhospital.com/birdfanfest20xx/  และชำระเงินโดยการโอนผ่าน QR Code ของศิริราชมูลนิธิเท่านั้น
+
+      สนับสนุนเว็บไซต์โดย บริษัท อำพลฟูดส์ โพรเซสซิ่ง จำกัด
+      `
     };
 
     await transporter.sendMail(mailOptions);
@@ -40,7 +54,21 @@ const sendOtp = async (contact, isEmail, otp) => {
       CHARGE: process.env.SMS_CHARGE,
       CODE: process.env.SMS_CODE,
       CTYPE: process.env.SMS_CTYPE,
-      CONTENT: `${process.env.SMS_HEAD_CONTENT} ${otp}`
+      CONTENT: `
+      เรียนคุณ ${UserName}
+      ศูนย์การแพทย์กาญจนาภิเษก คณะแพทยศาสตร์ศิริราชพยาบาล มหาวิทยาลัยมหิดล
+      ขอขอบคุณที่ท่านให้ความสนใจ คอนเสิร์ต Bird Fanfest 20XX (รอบการกุศล)  
+      โปรดใช้รหัสนี้  เพื่อเข้าสู่บัญชีของคุณ
+      Your OTP code is : ${otp}
+
+
+      หากท่านต้องการสอบถามเกี่ยวกับการซื้อบัตร
+      กรุณาติดต่อ 063-195-4174, 064-931-7415
+      LINE OA: @sigj.event (https://lin.ee/tfVt5us) 
+      โปรดระวังมิจฉาชีพ หรือบุคคลแอบอ้างเรียกรับเงิน หรือกระทำการใด ๆ ให้เกิดความเสียหายแก่ท่าน การซื้อบัตรคอนเสิร์ต Bird Fanfest 20XX (รอบการกุศล) จะต้องดำเนินการผ่านทางเว็บไซต์ : https://www.sigjhospital.com/birdfanfest20xx/  และชำระเงินโดยการโอนผ่าน QR Code ของศิริราชมูลนิธิเท่านั้น
+
+      สนับสนุนเว็บไซต์โดย บริษัท อำพลฟูดส์ โพรเซสซิ่ง จำกัด
+      `
     });
 
     await axios.post(process.env.SMS_API, smsPayload, {
@@ -51,9 +79,9 @@ const sendOtp = async (contact, isEmail, otp) => {
 };
 
 exports.register = async (req, res) => {
-  const { IdenNumber, Email, Tel, Way } = req.body;
+  const { IdenNumber, Email, Tel, Way, FirstName, LastName } = req.body;
 
-  if ( !Email || !Tel || !Way ) {
+  if ( !Email || !Tel || !Way || !FirstName || !LastName ) {
     return res.status(400).json({ status: 'fail', message: 'Missing required fields' });
   }
 
@@ -71,10 +99,11 @@ exports.register = async (req, res) => {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const userName = FirstName + ' ' + LastName;
     const contact = Way === 'Email' ? Email : Tel;
     const isEmail = Way === 'Email';
 
-    await sendOtp(contact, isEmail, otp);
+    await sendOtp(contact, isEmail, otp, userName);
 
     return res.json({ status: 'success', message: 'OTP sent' });
   } catch (err) {
@@ -165,22 +194,25 @@ exports.login = async (req, res) => {
   try {
     await sql.connect(dbConfig);
     const request = new sql.Request();
+    request.input('Contact', sql.NVarChar(255), Contact);
 
     const loginQuery = await request.query(`
       SELECT * FROM UserData
-      WHERE Email = '${Contact}' OR Tel = '${Contact}'
+      WHERE Email = @Contact OR Tel = @Contact
     `);
 
     if (loginQuery.recordset.length === 0) {
       return res.status(404).json({ status: 'fail', message: 'User not found' });
     }
 
+    const user = loginQuery.recordset[0];
+    const userName = user.FirstName + ' ' + user.LastName;
     const isEmail = Contact.includes('@');
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await sendOtp(Contact, isEmail, otp);
+    await sendOtp(Contact, isEmail, otp, userName);
 
-    return res.json({ status: 'success', message: 'OTP sent to user for login' });
+    return res.json({ status: 'success', message: `OTP sent to ${userName} for login` });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ status: 'fail', message: 'Server error', error: err.message });
@@ -219,114 +251,4 @@ exports.loginConfirm = async (req, res) => {
   const isAdmin = adminIds.includes(Number(user.ID));
 
   res.json({ status: 'success', message: 'Transaction recorded successfully', token, isAdmin});
-};
-
-exports.sendOtp = async (req, res) => {
-  const { Email } = req.body;
-
-  // Validate input
-  if (!Email) {
-    return res.status(400).json({ status: 'fail', message: 'Did not send email / phone number' });
-  }
-
-  const isEmail = Email.includes('@');
-  const isPhone = /^\d{10,15}$/.test(Email);
-
-  if (!isEmail && !isPhone) {
-    return res.status(400).json({ status: 'fail', message: 'Invalid email or phone number' });
-  }
-
-  // Check if OTP already exists and is still valid
-  const existing = otpStore.get(Email);
-  if (existing && Date.now() < existing.expires) {
-    return res.status(400).json({
-      status: 'fail',
-      message: 'An OTP has already been sent. Please wait before requesting a new one.'
-    });
-  }
-
-  // Generate OTP
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expires = Date.now() + 5 * 60 * 1000;
-
-  otpStore.set(Email, { otp, expires, contact: Email });
-
-  if (isEmail) {
-    // 📧 Email via Office365
-    const transporter = nodemailer.createTransport({
-      host: process.env.MAIL_HOST,
-      port: parseInt(process.env.MAIL_PORT, 10),
-      secure: process.env.MAIL_SECURE === 'true', // convert string to boolean
-      auth: {
-        user: process.env.MAIL_USER,
-        pass: process.env.MAIL_PASS
-      },
-      tls: {
-        ciphers: process.env.MAIL_TLS_CIPHERS
-      }
-    });
-
-    const mailOptions = {
-      from: process.env.MAIL_FROM,
-      to: req.body.Email,        // dynamically provided (e.g., req.body.Email)
-      subject: process.env.MAIL_SUBJECT,
-      text: `${process.env.MAIL_HEAD_CONTENT} ${otp}`
-    };
-
-    try {
-      await transporter.sendMail(mailOptions);
-      return res.json({ status: 'success', message: 'OTP sent to email' });
-    } catch (err) {
-      return res.status(500).json({ status: 'fail', message: 'Failed to send OTP email', error: err.message });
-    }
-
-  } else if (isPhone) {
-    // 📱 Send via Custom SMS Gateway
-    const toPhone = '66' + Email.replace(/^0/, '');
-
-    const smsPayload = qs.stringify({
-      CMD: 'SENDMSG',
-      FROM: 'AMPOLFOOD',
-      TO: toPhone,
-      REPORT: 'Y',
-      CHARGE: '66800474243',
-      CODE: '45140533002',
-      CTYPE: 'TEXT',
-      CONTENT: `Your OTP number are: ${otp}`
-    });
-
-    try {
-      const smsResponse = await axios.post('https://110.49.174.171:10443', smsPayload, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false })
-      });
-
-      return res.json({ status: 'success', message: 'OTP sent via SMS', response: smsResponse.data });
-    } catch (err) {
-      console.error('SMS sending error:', err.response?.data || err.message);
-      return res.status(500).json({ status: 'fail', message: 'Failed to send OTP SMS', error: err.message });
-    }
-  }
-};
-
-exports.verifyOtp = async (req, res) => {
-  const { Email, otp } = req.body;
-  const record = otpStore.get(Email);
-
-  if (!record) return res.status(400).json({ status: 'fail', message: 'No OTP request found for this email' });
-
-  if (Date.now() > record.expires) {
-    otpStore.delete(Email);
-    return res.status(400).json({ status: 'fail', message: 'OTP expired' });
-  }
-
-  if (record.otp !== otp) {
-    return res.status(401).json({ status: 'fail', message: 'Incorrect OTP' });
-  }
-
-    // Generate JWT token (valid for 2 hours)
-  const token = jwt.sign({ email: Email }, 'your_secret_key', { expiresIn: '3h' });
-  res.json({ status: 'success', message: 'Transaction recorded successfully', token });
 };

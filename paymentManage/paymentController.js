@@ -1,4 +1,4 @@
-const { sql, bcrypt, dbConfig } = require('../imports/shared');
+const { sql, bcrypt, nodemailer, dbConfig } = require('../imports/shared');
 
 exports.getUserTransaction = async (req, res) => {
   try {
@@ -12,9 +12,13 @@ exports.getUserTransaction = async (req, res) => {
 
     // Step 1: Get all unpaid transactions
     const transactionsResult = await request.query(`
-      SELECT [ID], Booking, TotalAmount, Status
-      FROM Transactions
-      WHERE User_ID = ${userId}
+      SELECT 
+        Trans.[ID], Trans.Booking, Trans.TotalAmount, Trans.BillURL, Trans.BackURL1, Trans.BackURL2, Trans.Status, 
+        Trans.Tax_status, Tax.Tax_Identification_No, Tax.InName, Tax.Name as Tax_Name, Tax.Tax_Address, Tax.Tax_Amount, Tax.Email
+      FROM 
+        Transactions as Trans Left JOIN Tax_Invoice_Records as Tax ON Trans.Tax_id = Tax.id
+      WHERE 
+        User_ID = ${userId}
     `);
 
     const transactions = transactionsResult.recordset;
@@ -55,6 +59,15 @@ exports.getUserTransaction = async (req, res) => {
       transactionId :tx.ID,
       totalAmount: tx.TotalAmount,
       Status: tx.Status,
+      TaxStatus: tx.Tax_Status,
+      TaxInName: tx.InName,
+      TaxName: tx.Name,
+      TaxIDNo: tx.Tax_Identification_No,
+      TaxAddress: tx.Tax_Address,
+      TaxMail: tx.Email,
+      BillURL: tx.BillURL,
+      BackURL1: tx.BackURL1,
+      BackURL2: tx.BackURL2,
       seats_data: tx.seatIds.map(id => seatMap.get(id)).filter(Boolean)
     }));
 
@@ -77,18 +90,18 @@ exports.cancelUserTransaction = async (req, res) => {
   try {
     await sql.connect(dbConfig);
     const request = new sql.Request();
-    request.input('TransactionID', sql.Int, transactionId);
+    request.input('TransactionID', sql.NVarChar(50), transactionId);
 
     // Step 1: Get transaction info
     const result = await request.query(`
-      SELECT User_ID, Booking FROM Transactions WHERE ID = @TransactionID
+      SELECT User_ID, Tax_id, Booking FROM Transactions WHERE ID = @TransactionID
     `);
 
     if (result.recordset.length === 0) {
       return res.status(404).json({ status: 'fail', message: 'Transaction not found' });
     }
 
-    const { User_ID, Booking } = result.recordset[0];
+    const { User_ID, Booking, Tax_id } = result.recordset[0];
 
     // Step 2: Authorization check
     const isOwner = requesterId === User_ID;
@@ -115,6 +128,10 @@ exports.cancelUserTransaction = async (req, res) => {
       DELETE FROM Transactions WHERE ID = @TransactionID
     `);
 
+    await request.query(`
+      DELETE FROM Tax_Invoice_Records WHERE ID = ${Tax_id}
+    `);
+
     const logRequest = new sql.Request();
     logRequest.input('User_ID', sql.Int, requesterId);
     logRequest.input('Bookings', sql.NVarChar(sql.MAX), Booking);
@@ -125,6 +142,50 @@ exports.cancelUserTransaction = async (req, res) => {
       VALUES (@User_ID, @Bookings, @Message)
     `);
 
+    if (isAdmin) {
+      const userData = await request.query(`
+        SELECT FirstName, LastName, Email FROM UserData WHERE ID = ${User_ID}
+      `);
+
+      const { FirstName, LastName, Email } = userData.recordset[0];
+      const userName = FirstName + ' ' + LastName;
+      
+      const transporter = nodemailer.createTransport({
+        host: process.env.MAIL_HOST,
+        port: parseInt(process.env.MAIL_PORT, 10),
+        secure: process.env.MAIL_SECURE === 'true',
+        auth: {
+          user: process.env.MAIL_USER,
+          pass: process.env.MAIL_PASS
+        },
+        tls: {
+          ciphers: process.env.MAIL_TLS_CIPHERS
+        }
+      });
+
+      const mailOptions = {
+        from: process.env.MAIL_FROM,
+        to: Email,
+        subject: "Your transaction have been cancel.",
+        text: `
+        เรียนคุณ ${userName}
+        หมายเลขการจอง ${transactionId} ของท่าน ถูกยกเลิก เนื่องจากท่านไม่ได้ชำระเงิน ในเวลาที่กำหนด 
+        ท่านสามารถจองบัตรอีกครั้ง ได้ที่ www.sigjhospital.com/birdfanfest20xx
+
+        หากท่านต้องการสอบถามเกี่ยวกับการจองบัตร
+        กรุณาติดต่อ 063-195-4174, 064-931-7415
+        LINE OA: @sigj.event (https://lin.ee/tfVt5us) 
+        โปรดระวังมิจฉาชีพ หรือบุคคลแอบอ้างเรียกรับเงิน หรือกระทำการใด ๆ ให้เกิดความเสียหายแก่ท่าน การซื้อบัตรคอนเสิร์ต Bird Fanfest 20XX (รอบการกุศล) จะต้องดำเนินการผ่านทางเว็บไซต์ : https://www.sigjhospital.com/birdfanfest20xx/  และชำระเงินโดยการโอนผ่าน QR Code ของศิริราชมูลนิธิเท่านั้น
+        สนับสนุนเว็บไซต์โดย บริษัท อำพลฟูดส์ โพรเซสซิ่ง จำกัด`
+      };
+
+      try {
+        await transporter.sendMail(mailOptions);
+      } catch (mailErr) {
+        console.error('Email send failed:', mailErr.message);
+      }
+    }
+
     return res.json({ status: 'success', message: 'Transaction canceled and seats released' });
 
   } catch (err) {
@@ -134,7 +195,18 @@ exports.cancelUserTransaction = async (req, res) => {
 };
 
 exports.payUserTransaction = async (req, res) => {
-  const { transactionId, billUrl } = req.body;
+  const {
+    transactionId,
+    billUrl,
+    Tax_need,
+    InName,
+    Tax_Name,
+    Tax_Identification_No,
+    Tax_Address,
+    Tax_Email,
+    Notes
+  } = req.body;
+
   const requesterId = req.user?.id;
   const adminIds = (process.env.ADMIN_IDS || '').split(',').map(id => Number(id.trim()));
 
@@ -142,21 +214,24 @@ exports.payUserTransaction = async (req, res) => {
     return res.status(400).json({ status: 'fail', message: 'Transaction ID and Bill URL are required' });
   }
 
+  if (typeof Tax_need !== 'boolean') {
+    return res.status(400).json({ status: 'fail', message: 'Tax_need is required (true or false)' });
+  }
+
   try {
     await sql.connect(dbConfig);
     const request = new sql.Request();
-    request.input('TransactionID', sql.Int, transactionId);
+    request.input('TransactionID', sql.NVarChar(50), transactionId);
 
-    // Step 1: Get transaction info
     const result = await request.query(`
-      SELECT User_ID, Status FROM Transactions WHERE ID = @TransactionID
+      SELECT User_ID, Status, TotalAmount FROM Transactions WHERE ID = @TransactionID
     `);
 
     if (result.recordset.length === 0) {
       return res.status(404).json({ status: 'fail', message: 'Transaction not found' });
     }
 
-    const { User_ID, Status } = result.recordset[0];
+    const { User_ID, Status, TotalAmount } = result.recordset[0];
     const isOwner = requesterId === User_ID;
     const isAdmin = adminIds.includes(Number(requesterId));
 
@@ -168,9 +243,8 @@ exports.payUserTransaction = async (req, res) => {
       return res.status(400).json({ status: 'fail', message: 'Transaction is not in a payable state (Status must be 1)' });
     }
 
-    // Step 2: Update the transaction
     const updateRequest = new sql.Request();
-    updateRequest.input('TransactionID', sql.Int, transactionId);
+    updateRequest.input('TransactionID', sql.NVarChar(50), transactionId);
     updateRequest.input('BillURL', sql.NVarChar(sql.MAX), billUrl);
 
     await updateRequest.query(`
@@ -179,248 +253,59 @@ exports.payUserTransaction = async (req, res) => {
       WHERE ID = @TransactionID
     `);
 
-    return res.json({ status: 'success', message: 'Transaction marked as paid successfully' });
+    if (Tax_need) {
+      const userQuery = await new sql.Request()
+        .input('UserID', sql.Int, User_ID)
+        .query(`SELECT Addr as Address, IdenNumber, Email AS UserEmail FROM UserData WHERE ID = @UserID`);
 
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ status: 'fail', message: 'Server error', error: err.message });
-  }
-};
+      const userData = userQuery.recordset[0];
 
+      const taxAddress = Tax_Address === 'Same' || !Tax_Address ? userData?.Address : Tax_Address;
+      const taxEmail = Tax_Email === 'Same' || !Tax_Email ? userData?.UserEmail : Tax_Email;
+      const taxId = Tax_Identification_No === 'Same' ? userData?.IdenNumber : Tax_Identification_No;
 
-exports.approveUserTransaction = async (req, res) => {
-  const { transactionId } = req.body;
-  const requesterId = req.user?.id;
-  const adminIds = (process.env.ADMIN_IDS || '').split(',').map(id => Number(id.trim()));
+      const taxAmount = parseFloat((TotalAmount * 0.07).toFixed(2));
 
-  if (!transactionId) {
-    return res.status(400).json({ status: 'fail', message: 'Transaction ID is required' });
-  }
+      const taxInsertRequest = new sql.Request();
+      taxInsertRequest.input('InName', sql.NVarChar(sql.MAX), InName);
+      taxInsertRequest.input('Name', sql.NVarChar(255), Tax_Name || null);
+      taxInsertRequest.input('Tax_Identification_No', sql.NVarChar(20), taxId);
+      taxInsertRequest.input('Tax_Address', sql.NVarChar(500), taxAddress);
+      taxInsertRequest.input('Invoice_Amount', sql.Decimal(10, 2), TotalAmount);
+      taxInsertRequest.input('Tax_Amount', sql.Decimal(10, 2), taxAmount);
+      taxInsertRequest.input('Approved_By_Admin', sql.Int, null);
+      taxInsertRequest.input('Email', sql.NVarChar(255), taxEmail);
+      taxInsertRequest.input('Notes', sql.NVarChar(sql.MAX), Notes || null);
 
-  if (!adminIds.includes(Number(requesterId))) {
-    return res.status(403).json({ status: 'fail', message: 'Only admins can approve transactions' });
-  }
-
-  try {
-    await sql.connect(dbConfig);
-    const request = new sql.Request();
-    request.input('TransactionID', sql.Int, transactionId);
-
-    // Step 1: Get transaction info
-    const result = await request.query(`
-      SELECT Booking, Status FROM Transactions WHERE ID = @TransactionID
-    `);
-
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ status: 'fail', message: 'Transaction not found' });
-    }
-
-    const { Booking, Status } = result.recordset[0];
-
-    if (Status !== 2) {
-      return res.status(400).json({ status: 'fail', message: 'Only transactions with status = 2 (paid) can be approved' });
-    }
-
-    const seatIds = Booking.split('|').filter(Boolean).map(Number);
-    const idList = seatIds.join(',');
-
-    if (seatIds.length > 0) {
-      // Step 2: Update seat status to 2 (paid)
-      await request.query(`
-        UPDATE Seats_data
-        SET STATUS = 2, UPDATED_AT = GETDATE()
-        WHERE ID IN (${idList})
+      const taxResult = await taxInsertRequest.query(`
+        INSERT INTO Tax_Invoice_Records (
+          InName, Name, Tax_Identification_No, Tax_Address,
+          Invoice_Amount, Tax_Amount, Approved_By_Admin,
+          Email, Notes
+        )
+        OUTPUT INSERTED.ID
+        VALUES (
+          @InName, @Name, @Tax_Identification_No, @Tax_Address,
+          @Invoice_Amount, @Tax_Amount, @Approved_By_Admin,
+          @Email, @Notes
+        )
       `);
-    }
 
-    // Step 3: Update transaction status to 3 (approved)
-    await request.query(`
-      UPDATE Transactions SET Status = 3 WHERE ID = @TransactionID
-    `);
+      const taxInvoiceId = taxResult.recordset[0].ID;
 
-    const logRequest = new sql.Request();
-    logRequest.input('User_ID', sql.Int, requesterId);
-    logRequest.input('Bookings', sql.NVarChar(sql.MAX), Booking);
-    logRequest.input('Message', sql.NVarChar(sql.MAX), 'Approved transaction/seats');
+      const updateTaxStatus = new sql.Request();
+      await updateTaxStatus.query(`
+        UPDATE Transactions SET Tax_Status = 1, Tax_id = ${taxInvoiceId} WHERE ID = '${transactionId}'
+      `);
 
-    await logRequest.query(`
-      INSERT INTO Seat_Logs (User_ID, Bookings, Message)
-      VALUES (@User_ID, @Bookings, @Message)
-    `);
-
-    return res.json({ status: 'success', message: 'Transaction approved and seats marked as paid' });
-
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ status: 'fail', message: 'Server error', error: err.message });
-  }
-};
-
-
-exports.getAllTransactions = async (req, res) => {
-  try {
-    const requesterId = req.user?.id;
-    const adminIds = (process.env.ADMIN_IDS || '').split(',').map(id => Number(id.trim()));
-    const isAdmin = adminIds.includes(Number(requesterId));
-
-    if (!isAdmin) {
-      return res.status(403).json({ status: 'fail', message: 'Only admin can access this endpoint' });
-    }
-
-    await sql.connect(dbConfig);
-    const request = new sql.Request();
-
-    // Step 1: Get transactions with user data
-    const result = await request.query(`
-      SELECT 
-        T.ID as transactionId,
-        T.User_ID as userId,
-        T.Booking,
-        T.TotalAmount,
-        T.BillURL,
-        T.Status,
-        T.CreatedAt,
-        U.FirstName,
-        U.LastName,
-        U.Tel as Phone,
-        U.Email,
-        U.Addr
-      FROM Transactions T
-      INNER JOIN UserData U ON T.User_ID = U.ID
-      ORDER BY T.CreatedAt DESC
-    `);
- 
-    const transactions = result.recordset;
-
-    // Step 2: Extract all unique seat IDs
-    const allSeatIds = new Set();
-    const transactionsMapped = transactions.map(tx => {
-      const ids = tx.Booking.split('|').filter(Boolean).map(Number);
-      ids.forEach(id => allSeatIds.add(id));
-      return { ...tx, seatIds: ids };
-    });
-
-    if (allSeatIds.size === 0) {
-      return res.json({ status: 'success', data: [] });
-    }
-
-    const seatIdList = Array.from(allSeatIds).join(',');
-    const seatRequest = new sql.Request();
-
-    const seatResult = await seatRequest.query(`
-      SELECT ID, ZONE, ROW, [COLUMN], DISPLAY
-      FROM Seats_data
-      WHERE ID IN (${seatIdList})
-    `);
-
-    const seatMap = new Map();
-    seatResult.recordset.forEach(seat => {
-      seatMap.set(seat.ID, {
-        zone: seat.ZONE,
-        row: seat.ROW,
-        column: seat.COLUMN,
-        display: seat.DISPLAY
+      return res.json({
+        status: 'success',
+        message: 'Transaction marked as paid and tax invoice recorded',
+        taxInvoiceId
       });
-    });
-
-    // Step 3: Combine seat data into the result
-    const formatted = transactionsMapped.map(tx => ({
-      transactionId: tx.transactionId,
-      userId: tx.userId,
-      FirstName: tx.FirstName,
-      LastName: tx.LastName,
-      Phone: tx.Phone,
-      Email: tx.Email,
-      Address: tx.Addr,
-      TotalAmount: tx.TotalAmount,
-      BillURL: tx.BillURL,
-      Status: tx.Status,
-      CreatedAt: tx.CreatedAt,
-      seats_data: tx.seatIds.map(id => seatMap.get(id)).filter(Boolean)
-    }));
-
-    return res.json({ status: 'success', data: formatted });
-
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ status: 'fail', message: 'Database error', error: err.message });
-  }
-};
-
-exports.getSeatLogs = async (req, res) => {
-  try {
-    const requesterId = req.user?.id;
-    const adminIds = (process.env.ADMIN_IDS || '').split(',').map(id => Number(id.trim()));
-    const isAdmin = adminIds.includes(Number(requesterId));
-
-    if (!isAdmin) {
-      return res.status(403).json({ status: 'fail', message: 'Only admin can access this endpoint' });
+    } else {
+      return res.json({ status: 'success', message: 'Transaction marked as paid successfully' });
     }
-
-    await sql.connect(dbConfig);
-    const request = new sql.Request();
-
-    // Step 1: Get logs with user info
-    const logResult = await request.query(`
-      SELECT 
-        L.ID as logId,
-        L.User_ID,
-        L.Bookings,
-        L.Message,
-        L.Created_At,
-        U.FirstName,
-        U.LastName
-      FROM Seat_Logs L
-      INNER JOIN UserData U ON L.User_ID = U.ID
-      ORDER BY L.Created_At DESC
-    `);
-
-    const logs = logResult.recordset;
-
-    // Step 2: Collect all unique seat IDs
-    const allSeatIds = new Set();
-    const logsMapped = logs.map(log => {
-      const seatIds = log.Bookings.split('|').filter(Boolean).map(Number);
-      seatIds.forEach(id => allSeatIds.add(id));
-      return { ...log, seatIds };
-    });
-
-    if (allSeatIds.size === 0) {
-      return res.json({ status: 'success', data: [] });
-    }
-
-    // Step 3: Get all seat info in bulk
-    const seatIdList = Array.from(allSeatIds).join(',');
-    const seatRequest = new sql.Request();
-    const seatResult = await seatRequest.query(`
-      SELECT ID, LEVEL, ZONE, ROW, [COLUMN]
-      FROM Seats_data
-      WHERE ID IN (${seatIdList})
-    `);
-
-    const seatMap = new Map();
-    seatResult.recordset.forEach(seat => {
-      seatMap.set(seat.ID, {
-        level: seat.LEVEL,
-        zone: seat.ZONE,
-        row: seat.ROW,
-        column: seat.COLUMN
-      });
-    });
-
-    // Step 4: Format response
-    const formatted = logsMapped.map(log => ({
-      logId: log.logId,
-      userId: log.User_ID,
-      firstName: log.FirstName,
-      lastName: log.LastName,
-      isAdmin: adminIds.includes(log.User_ID),
-      message: log.Message,
-      At: log.Created_At,
-      seats_data: log.seatIds.map(id => seatMap.get(id)).filter(Boolean)
-    }));
-
-    return res.json({ status: 'success', data: formatted });
 
   } catch (err) {
     console.error(err);
