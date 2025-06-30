@@ -295,7 +295,7 @@ exports.payUserTransaction = async (req, res) => {
 
       const updateTaxStatus = new sql.Request();
       await updateTaxStatus.query(`
-        UPDATE Transactions SET Tax_Status = 1, Tax_id = ${taxInvoiceId} WHERE ID = '${transactionId}'
+        UPDATE Transactions SET Tax_Status = 2, Tax_id = ${taxInvoiceId} WHERE ID = '${transactionId}'
       `);
 
       return res.json({
