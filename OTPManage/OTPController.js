@@ -4,7 +4,7 @@ const axios = require('axios');
 const qs = require('qs');
 require('dotenv').config();
 
-const sendOtp = async (contact, isEmail, otp, UserName) => {
+const sendOtp = async (contact, isEmail, otp) => {
   const expires = Date.now() + 5 * 60 * 1000;
   otpStore.set(contact, { otp, expires, contact });
 
@@ -27,7 +27,6 @@ const sendOtp = async (contact, isEmail, otp, UserName) => {
       to: contact,
       subject: process.env.MAIL_SUBJECT,
       text: `
-      เรียนคุณ ${UserName}
       ศูนย์การแพทย์กาญจนาภิเษก คณะแพทยศาสตร์ศิริราชพยาบาล มหาวิทยาลัยมหิดล
       ขอขอบคุณที่ท่านให้ความสนใจ คอนเสิร์ต Bird Fanfest 20XX (รอบการกุศล)  
       โปรดใช้รหัสนี้  เพื่อเข้าสู่บัญชีของคุณ
@@ -54,21 +53,7 @@ const sendOtp = async (contact, isEmail, otp, UserName) => {
       CHARGE: process.env.SMS_CHARGE,
       CODE: process.env.SMS_CODE,
       CTYPE: process.env.SMS_CTYPE,
-      CONTENT: `
-      เรียนคุณ ${UserName}
-      ศูนย์การแพทย์กาญจนาภิเษก คณะแพทยศาสตร์ศิริราชพยาบาล มหาวิทยาลัยมหิดล
-      ขอขอบคุณที่ท่านให้ความสนใจ คอนเสิร์ต Bird Fanfest 20XX (รอบการกุศล)  
-      โปรดใช้รหัสนี้  เพื่อเข้าสู่บัญชีของคุณ
-      Your OTP code is : ${otp}
-
-
-      หากท่านต้องการสอบถามเกี่ยวกับการซื้อบัตร
-      กรุณาติดต่อ 063-195-4174, 064-931-7415
-      LINE OA: @sigj.event (https://lin.ee/tfVt5us) 
-      โปรดระวังมิจฉาชีพ หรือบุคคลแอบอ้างเรียกรับเงิน หรือกระทำการใด ๆ ให้เกิดความเสียหายแก่ท่าน การซื้อบัตรคอนเสิร์ต Bird Fanfest 20XX (รอบการกุศล) จะต้องดำเนินการผ่านทางเว็บไซต์ : https://www.sigjhospital.com/birdfanfest20xx/  และชำระเงินโดยการโอนผ่าน QR Code ของศิริราชมูลนิธิเท่านั้น
-
-      สนับสนุนเว็บไซต์โดย บริษัท อำพลฟูดส์ โพรเซสซิ่ง จำกัด
-      `
+      CONTENT: `Your OTP code is : ${otp}`
     });
 
     await axios.post(process.env.SMS_API, smsPayload, {
@@ -79,9 +64,9 @@ const sendOtp = async (contact, isEmail, otp, UserName) => {
 };
 
 exports.register = async (req, res) => {
-  const { IdenNumber, Email, Tel, Way, FirstName, LastName } = req.body;
+  const { IdenNumber, Email, Tel, Way } = req.body;
 
-  if ( !Email || !Tel || !Way || !FirstName || !LastName ) {
+  if ( !Email || !Tel || !Way ) {
     return res.status(400).json({ status: 'fail', message: 'Missing required fields' });
   }
 
@@ -99,11 +84,11 @@ exports.register = async (req, res) => {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const userName = FirstName + ' ' + LastName;
+    // const userName = FirstName + ' ' + LastName;
     const contact = Way === 'Email' ? Email : Tel;
     const isEmail = Way === 'Email';
 
-    await sendOtp(contact, isEmail, otp, userName);
+    await sendOtp(contact, isEmail, otp);
 
     return res.json({ status: 'success', message: 'OTP sent' });
   } catch (err) {
@@ -210,7 +195,7 @@ exports.login = async (req, res) => {
     const isEmail = Contact.includes('@');
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await sendOtp(Contact, isEmail, otp, userName);
+    await sendOtp(Contact, isEmail, otp);
 
     return res.json({ status: 'success', message: `OTP sent to ${userName} for login` });
   } catch (err) {
