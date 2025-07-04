@@ -81,14 +81,14 @@ Permission: Owner or Admin
 Request : 
 {
   "transactionId": "A1-123456",
-  "billUrl": "https://example.com/bill.jpg",
+  "billUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA...",
   "Tax_need": true,
-  "InName": "Company",
-  "Tax_Name": "Ampon Co., Ltd.",
-  "Tax_Identification_No": "Same",
-  "Tax_Address": "Same",
-  "Tax_Email": "Same",
-  "Notes": "ส่งของที่อยู่สำนักงาน"
+  "InName": "บริษัท อำพลฟูดส์ จำกัด",
+  "Tax_Name": "Ampol Foods Co., Ltd.",
+  "Tax_Identification_No": "0105529012345",
+  "Tax_Address": "123/45 ถนนศรีอยุธยา กรุงเทพฯ",
+  "Tax_Email": "tax@ampolfood.com",
+  "Notes": "ออกใบกำกับภาษีเต็มรูปแบบ"
 }
 
 Response:
@@ -97,7 +97,8 @@ Success (With Tax):
 {
   "status": "success",
   "message": "Transaction marked as paid and tax invoice recorded",
-  "taxInvoiceId": 8
+  "taxInvoiceId": 102,
+  "ImageUrl": "https://your-s3-bucket.s3.amazonaws.com/bills/A1-123456-1689700000000.png"
 }
 
 Success (No Tax):
@@ -109,7 +110,7 @@ Success (No Tax):
 Failure (Invalid Status):
 {
   "status": "fail",
-  "message": "Transaction is not in a payable state (Status must be 1)"
+  "message": "Transaction ID and Bill URL are required"
 }
 
 Failure (Missing Parameters):
@@ -128,6 +129,13 @@ Failure (Invalid Tax Flag):
 {
   "status": "fail",
   "message": "Tax_need is required (true or false)"
+}
+
+S3 or DB error:
+{
+  "status": "fail",
+  "message": "Server error",
+  "error": "detailed error message here"
 }
 
 Example:

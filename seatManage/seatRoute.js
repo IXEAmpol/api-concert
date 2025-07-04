@@ -8,4 +8,4 @@ router.get('/getEmptySeats', authMiddleware, seatController.getEmptySeats);
 router.post('/bookSeats', authMiddleware, seatController.bookSeats);
 
 module.exports = router;
-     
+ 

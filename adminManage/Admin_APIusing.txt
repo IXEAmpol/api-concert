@@ -134,9 +134,10 @@ Permission : Admin Only
 Request:
 {
   "transactionId": "A1-123456",   // required, string format like ZONE-XXXXXX
-  "backUrl1": "https://example.com/img1.jpg",  // optional
-  "backUrl2": "https://example.com/img2.jpg"   // optional
-} //backUrl Need to have 1 out of 2
+  "billUrl": "data:image/jpeg;base64,...",     // optional
+  "backUrl1": "data:image/jpeg;base64,...",  // optional
+  "backUrl2": "data:image/jpeg;base64,..."   // optional
+} //need to at least have 1 image
 
 Success Response:
 {

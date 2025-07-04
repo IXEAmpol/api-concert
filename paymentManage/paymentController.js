@@ -1,4 +1,14 @@
 const { sql, bcrypt, nodemailer, dbConfig } = require('../imports/shared');
+const AWS = require('aws-sdk');
+const { Buffer } = require('buffer');
+
+AWS.config.update({
+  accessKeyId: process.env.AWS_ACCESS_KEY,
+  secretAccessKey: process.env.AWS_SECRET_KEY,
+  region: process.env.AWS_REGION // for example
+});
+
+const s3 = new AWS.S3();
 
 exports.getUserTransaction = async (req, res) => {
   try {
@@ -169,7 +179,7 @@ exports.cancelUserTransaction = async (req, res) => {
         subject: "Your transaction have been cancel.",
         text: `
         เรียนคุณ ${userName}
-        หมายเลขการจอง ${transactionId} ของท่าน ถูกยกเลิก เนื่องจากท่านไม่ได้ชำระเงิน ในเวลาที่กำหนด 
+        หมายเลขการจอง ${transactionId} ของท่าน ถูกยกเลิก
         ท่านสามารถจองบัตรอีกครั้ง ได้ที่ www.sigjhospital.com/birdfanfest20xx
 
         หากท่านต้องการสอบถามเกี่ยวกับการจองบัตร
@@ -219,6 +229,24 @@ exports.payUserTransaction = async (req, res) => {
   }
 
   try {
+    const matches = billUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+    if (!matches) throw new Error('Invalid image base64');
+    const mimeType = matches[1];
+    const ext = mimeType.split('/')[1];
+    const buffer = Buffer.from(matches[2], 'base64');
+
+    const key = `bills/${transactionId}-${Date.now()}.${ext}`;
+    const uploadResult = await s3.upload({
+      Bucket: process.env.S3_BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentEncoding: 'base64',
+      ContentType: mimeType,
+      ACL: 'public-read'
+    }).promise();
+
+    const billS3Url = uploadResult.Location;
+
     await sql.connect(dbConfig);
     const request = new sql.Request();
     request.input('TransactionID', sql.NVarChar(50), transactionId);
@@ -245,7 +273,7 @@ exports.payUserTransaction = async (req, res) => {
 
     const updateRequest = new sql.Request();
     updateRequest.input('TransactionID', sql.NVarChar(50), transactionId);
-    updateRequest.input('BillURL', sql.NVarChar(sql.MAX), billUrl);
+    updateRequest.input('BillURL', sql.NVarChar(sql.MAX), billS3Url);
 
     await updateRequest.query(`
       UPDATE Transactions
@@ -301,7 +329,8 @@ exports.payUserTransaction = async (req, res) => {
       return res.json({
         status: 'success',
         message: 'Transaction marked as paid and tax invoice recorded',
-        taxInvoiceId
+        taxInvoiceId,
+        ImageUrl: billS3Url
       });
     } else {
       return res.json({ status: 'success', message: 'Transaction marked as paid successfully' });

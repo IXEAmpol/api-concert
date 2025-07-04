@@ -9,6 +9,9 @@ const HOST = process.env.HOST || 'localhost';
 const PORT = process.env.PORT || 3000;
 const allowedOrigin = process.env.ALLOWED_ORIGIN;
 
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
+
 // Load SSL credentials
 const privateKey = fs.readFileSync('./certs/STAR_ampolfood_com.key', 'utf8');
 const certificate = fs.readFileSync('./certs/STAR_ampolfood_com.crt', 'utf8');

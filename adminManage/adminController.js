@@ -1,5 +1,15 @@
 const { sql, bcrypt, nodemailer, dbConfig } = require('../imports/shared');
 const excel = require('exceljs');
+const AWS = require('aws-sdk');
+const { Buffer } = require('buffer');
+
+AWS.config.update({
+  accessKeyId: process.env.AWS_ACCESS_KEY,
+  secretAccessKey: process.env.AWS_SECRET_KEY,
+  region: process.env.AWS_REGION // for example
+});
+
+const s3 = new AWS.S3();
 
 exports.approveUserTransaction = async (req, res) => {
   const { transactionId } = req.body;
@@ -375,7 +385,7 @@ exports.getSeatLogs = async (req, res) => {
 };
 
 exports.uploadBackImage = async (req, res) => {
-  const { transactionId, backUrl1, backUrl2 } = req.body;
+  const { transactionId, backUrl1, backUrl2, billUrl } = req.body;
   const requesterId = req.user?.id;
 
   // Validate admin
@@ -388,14 +398,14 @@ exports.uploadBackImage = async (req, res) => {
     return res.status(400).json({ status: 'fail', message: 'Transaction ID is required' });
   }
 
-  if (backUrl1 === undefined && backUrl2 === undefined) {
-    return res.status(400).json({ status: 'fail', message: 'At least one of backUrl1 or backUrl2 must be provided' });
+  if (!backUrl1 && !backUrl2 && !billUrl) {
+    return res.status(400).json({ status: 'fail', message: 'At least one of billUrl, backUrl1, or backUrl2 must be provided' });
   }
 
   try {
     await sql.connect(dbConfig);
 
-    // Step 1: Get transaction booking info
+    // Step 1: Get booking info
     const getBookingReq = new sql.Request();
     getBookingReq.input('TransactionID', sql.NVarChar(50), transactionId);
     const transactionRes = await getBookingReq.query(`
@@ -408,18 +418,53 @@ exports.uploadBackImage = async (req, res) => {
 
     const bookingStr = transactionRes.recordset[0].Booking;
 
-    // Step 2: Build update query securely
+    // Step 2: Upload helper
+    const uploadBase64ToS3 = async (base64Data, suffix) => {
+      const matches = base64Data.match(/^data:(image\/\w+);base64,(.+)$/);
+      if (!matches) throw new Error(`Invalid image format for ${suffix}`);
+      const mimeType = matches[1];
+      const ext = mimeType.split('/')[1];
+      const buffer = Buffer.from(matches[2], 'base64');
+      const key = `uploads/${transactionId}-${suffix}-${Date.now()}.${ext}`;
+      const uploadResult = await s3.upload({
+        Bucket: process.env.S3_BUCKET,
+        Key: key,
+        Body: buffer,
+        ContentEncoding: 'base64',
+        ContentType: mimeType,
+        ACL: 'public-read'
+      }).promise();
+      return uploadResult.Location;
+    };
+
+    let s3BackUrl1 = null;
+    let s3BackUrl2 = null;
+    let s3BillUrl = null;
+
+    if (backUrl1) s3BackUrl1 = await uploadBase64ToS3(backUrl1, 'back1');
+    if (backUrl2) s3BackUrl2 = await uploadBase64ToS3(backUrl2, 'back2');
+    if (billUrl)   s3BillUrl   = await uploadBase64ToS3(billUrl,   'bill');
+
+    // Step 3: Update transaction
     const updateRequest = new sql.Request();
     updateRequest.input('TransactionID', sql.NVarChar(50), transactionId);
 
     let setClauses = [];
-    if (backUrl1 !== undefined) {
-      updateRequest.input('BackURL1', sql.NVarChar(sql.MAX), backUrl1);
+    if (s3BackUrl1) {
+      updateRequest.input('BackURL1', sql.NVarChar(sql.MAX), s3BackUrl1);
       setClauses.push('BackURL1 = @BackURL1');
     }
-    if (backUrl2 !== undefined) {
-      updateRequest.input('BackURL2', sql.NVarChar(sql.MAX), backUrl2);
+    if (s3BackUrl2) {
+      updateRequest.input('BackURL2', sql.NVarChar(sql.MAX), s3BackUrl2);
       setClauses.push('BackURL2 = @BackURL2');
+    }
+    if (s3BillUrl) {
+      updateRequest.input('BillURL', sql.NVarChar(sql.MAX), s3BillUrl);
+      setClauses.push('BillURL = @BillURL');
+    }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ status: 'fail', message: 'Nothing to update' });
     }
 
     const updateQuery = `
@@ -427,14 +472,13 @@ exports.uploadBackImage = async (req, res) => {
       SET ${setClauses.join(', ')}
       WHERE ID = @TransactionID
     `;
-
     await updateRequest.query(updateQuery);
 
-    // Step 3: Insert into Seat_Logs
+    // Step 4: Log the action
     const logRequest = new sql.Request();
     logRequest.input('User_ID', sql.Int, requesterId);
     logRequest.input('Bookings', sql.NVarChar(sql.MAX), bookingStr);
-    logRequest.input('Message', sql.NVarChar(sql.MAX), 'Upload back up image');
+    logRequest.input('Message', sql.NVarChar(sql.MAX), 'Upload back/bill image');
     await logRequest.query(`
       INSERT INTO Seat_Logs (User_ID, Bookings, Message, Created_At)
       VALUES (@User_ID, @Bookings, @Message, GETDATE())
@@ -442,7 +486,10 @@ exports.uploadBackImage = async (req, res) => {
 
     return res.status(200).json({
       status: 'success',
-      message: 'Back image(s) updated and logged successfully',
+      message: 'Images uploaded and logged successfully',
+      BillURL: s3BillUrl,
+      BackURL1: s3BackUrl1,
+      BackURL2: s3BackUrl2
     });
 
   } catch (err) {
@@ -454,6 +501,8 @@ exports.uploadBackImage = async (req, res) => {
     });
   }
 };
+
+
 
 exports.downloadTaxTransactions = async (req, res) => {
   const requesterId = req.user?.id;
