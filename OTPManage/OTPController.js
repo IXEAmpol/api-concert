@@ -236,5 +236,6 @@ exports.loginConfirm = async (req, res) => {
   const adminIds = (process.env.ADMIN_IDS || '').split(',').map(id => Number(id.trim()));
   const isAdmin = adminIds.includes(Number(user.ID));
 
+  otpStore.delete(Contact);
   res.json({ status: 'success', message: 'Transaction recorded successfully', token, isAdmin});
 };
