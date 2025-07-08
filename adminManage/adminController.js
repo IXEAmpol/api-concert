@@ -347,7 +347,7 @@ exports.getSeatLogs = async (req, res) => {
     const seatIdList = Array.from(allSeatIds).join(',');
     const seatRequest = new sql.Request();
     const seatResult = await seatRequest.query(`
-      SELECT ID, LEVEL, ZONE, ROW, [COLUMN]
+      SELECT ID, LEVEL, ZONE, ROW, [COLUMN], DISPLAY
       FROM Seats_data
       WHERE ID IN (${seatIdList})
     `);
@@ -358,7 +358,8 @@ exports.getSeatLogs = async (req, res) => {
         level: seat.LEVEL,
         zone: seat.ZONE,
         row: seat.ROW,
-        column: seat.COLUMN
+        column: seat.COLUMN,
+        display: seat.DISPLAY
       });
     });
 
